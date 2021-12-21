@@ -108,43 +108,27 @@ def train(params, args, local_rank, world_rank, world_size):
     model.train()
     step_count = 0
     for i, data in enumerate(train_data_loader, 0):
-      if (args.enable_manual_profiling and world_rank==0):
-          if (epoch == 1 and i == 0):
-              torch.cuda.profiler.start()
-          if (epoch == 1 and i == 59):
-              torch.cuda.profiler.stop()
 
-      if args.enable_manual_profiling: torch.cuda.nvtx.range_push(f"step {i}")
       iters += 1
       dat_start = time.time()
-      if args.enable_manual_profiling: torch.cuda.nvtx.range_push(f"data copy in {i}")
       inp, tar = map(lambda x: x.to(device), data)
-      if args.enable_manual_profiling: torch.cuda.nvtx.range_pop() # copy in
       tr_start = time.time()
       b_size = inp.size(0)
       
       lr_schedule(optimizer, iters, global_bs=params.global_batch_size, base_bs=params.base_batch_size, **params.lr_schedule)
       optimizer.zero_grad()
-      if args.enable_manual_profiling: torch.cuda.nvtx.range_push(f"forward")
       with autocast(params.enable_amp):
         gen = model(inp)
         loss = loss_func(gen, tar, lambda_rho)
         tr_loss.append(loss.item())
-      if args.enable_manual_profiling: torch.cuda.nvtx.range_pop() #forward
 
       if params.enable_amp:
         scaler.scale(loss).backward()
-        if args.enable_manual_profiling: torch.cuda.nvtx.range_push(f"optimizer")
         scaler.step(optimizer)
-        if args.enable_manual_profiling: torch.cuda.nvtx.range_pop() # optimizer
         scaler.update()
       else:
         loss.backward()
-        if args.enable_manual_profiling: torch.cuda.nvtx.range_push(f"optimizer")
         optimizer.step()
-        if args.enable_manual_profiling: torch.cuda.nvtx.range_pop() # optimizer
-
-      if args.enable_manual_profiling: torch.cuda.nvtx.range_pop() # step
 
       tr_end = time.time()
       tr_time += tr_end - tr_start
@@ -195,7 +179,6 @@ if __name__ == '__main__':
   parser.add_argument("--enable_apex", action='store_true', help='enable apex fused Adam optimizer')
   parser.add_argument("--enable_jit", action='store_true', help='enable JIT compilation')
   parser.add_argument("--enable_benchy", action='store_true', help='enable benchy tool usage')
-  parser.add_argument("--enable_manual_profiling", action='store_true', help='enable manual nvtx ranges and profiler start/stop calls')
   parser.add_argument("--data_loader_config", default=None, type=str,
                       choices=['synthetic', 'inmem', 'lowmem', 'dali-lowmem'],
                       help="dataloader configuration. choices: 'synthetic', 'inmem', 'lowmem', 'dali-lowmem'")
@@ -207,9 +190,6 @@ if __name__ == '__main__':
   parser.add_argument("--noddp", action='store_true', help='disable DDP communication')
   args = parser.parse_args()
 
-  if (args.enable_benchy and args.enable_manual_profiling):
-      raise RuntimeError("Enable either benchy profiling or manual profiling, not both.")
-  
   run_num = args.run_num
 
   params = YParams(os.path.abspath(args.yaml_config), args.config)
@@ -268,4 +248,3 @@ if __name__ == '__main__':
   if params.distributed:
     torch.distributed.barrier()
   logging.info('DONE ---- rank %d'%world_rank)
-
