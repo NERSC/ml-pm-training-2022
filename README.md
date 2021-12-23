@@ -1,7 +1,6 @@
-# SC21 Deep Learning at Scale Tutorial
+# 2022 Perlmutter User Training: Deep Learning Hands-on
 
-This repository contains the example code material for the SC21 tutorial:
-*Deep Learning at Scale*.
+This repository contains the example code material for the deep learning hands-on section of the 2022 Perlmutter User Training.
 
 **Contents**
 * [Links](#links)
@@ -27,8 +26,7 @@ Data download: https://portal.nersc.gov/project/dasrepo/pharring/
 
 ### Software environment
 
-Access to NERSC's Perlmutter machine is provided for this tutorial via [jupyter.nersc.gov](https://jupyter.nersc.gov). 
-Training account setup instructions will be given during the session. Once you have your provided account credentials, you can log in to Jupyter via the link (leave the OTP field blank when logging into Jupyter).
+We recommend accesssing Perlmutter for this hands-on via [jupyter.nersc.gov](https://jupyter.nersc.gov). 
 Once logged into the hub, start a session by clicking the button for Perlmutter Shared CPU Node (other options will not work with this tutorial material). This will open up a session on a Perlmutter login node, from which you can submit jobs to the GPU nodes and monitor their progress.
 
 To begin, start a terminal from JupyterHub and clone this repository with:
@@ -40,9 +38,11 @@ You can use the Jupyter file browser to view and edit source files and scripts. 
 cd ml-pm-training-2022
 ```
 
-For running slurm jobs on Perlmutter, we will use training accounts which are provided under the `ntrain4` project. The slurm script `submit_pm.sh` included in the repository is configured to work automatically as is, but if you submit your own custom jobs via `salloc` or `sbatch` you must include the following flags for slurm:
-* `-A ntrain4_g` is required for training accounts
-* `--reservation=sc21_tutorial_01` is required to access the set of GPU nodes we have reserved for the duration of the tutorial.
+Alternately, users may access Perlmutter via ssh, but we still recommend using Jupyter for viewing TensorBoard logs output by the hands-on exercises.
+
+For running slurm jobs on Perlmutter, we will use training accounts which are provided under the `ntrain3` project. The slurm script `submit_pm.sh` included in the repository is configured to work automatically as is, but if you submit your own custom jobs via `salloc` or `sbatch` you must include the following flags for slurm:
+* `-A ntrain3_g` is required for training accounts
+* `--reservation=perlmutter_day3` is required to access the set of GPU nodes we have reserved for the duration of the hands-on.
 
 The code can be run using the `romerojosh/containers:sc21_tutorial` docker container. On Perlmutter, docker containers are run via [shifter](https://docs.nersc.gov/development/shifter/), and this container is already downloaded and automatically invoked by our job submission scripts. Our container is based on the [NVIDIA ngc 21.10 pytorch container](https://docs.nvidia.com/deeplearning/frameworks/pytorch-release-notes/rel_21-10.html#rel_21-10), with a few additional packages added. See the dockerfile in [`docker/Dockerfile`](docker/Dockerfile) for details.
 
@@ -61,8 +61,6 @@ The basic data loading pipeline is defined in [`utils/data_loader.py`](utils/dat
 
 It is common practice to decay the learning rate according to some schedule as the model trains, so that the optimizer can settle into sharper minima during gradient descent. Here we opt for the cosine learning rate decay schedule, which starts at an intial learning rate and decays continuously throughout training according to a cosine function. This is handled by the `lr_schedule` routine defined in [`utils/__init__.py`](utils/__init__.py), which also has logic to implement learning rate scaling and warm-up for use in the [Distributed GPU training](#Distributed-GPU-training) section
 
-As we will see in the [Single GPU performance profiling and optimization](#Single-GPU-performance-profiling-and-optimization) section, the random rotations add considerable overhead to data loading during training, and we can achieve performance gains by doing these preprocessing steps on the GPU instead using NVIDIA's DALI library. Code for this is found in [`utils/data_loader_dali.py`](utils/data_loader_dali.py).
-
 The script to train the model is [`train.py`](train.py), which uses the following arguments to load the desired training setup:
 ```
 --yaml_config YAML_CONFIG   path to yaml file containing training configs
@@ -77,18 +75,15 @@ Based on the selected configuration, the train script will then:
     * Calling `backward()` on the loss value to backpropagate gradients. Note the use of the `grad_scaler` will be explained below when enabling mixed precision.
     * Applying the model to the validation dataset and logging training and validation metrics to visualize in TensorBoard (see if you can find where we construct the TensorBoard `SummaryWriter` and where our specific metrics are logged via the `add_scalar` call).
 
-Besides the `train.py` script, we have a slightly more complex [`train_graph.py`](train_graph.py)
-script, which implements the same functionality with added capability for using the CUDA Graphs APIs introduced in PyTorch 1.10. This topic will be covered in the [Single GPU performance profiling and optimization](#Single-GPU-performance-profiling-and-optimization) section.
-
-More info on the model and data can be found in the [slides](https://drive.google.com/drive/u/1/folders/1Ei56_HDjLMPbdLq9QdQhoxN3J1YdzZw0). If you are experimenting with this repository after the tutorial date, you can download the data from here: https://portal.nersc.gov/project/dasrepo/pharring/.
-Note that you will have to adjust the data path in `submit_pm.sh` to point yor personal copy after downloading.
+More info on the model and data can be found in the [slides](https://drive.google.com/drive/u/1/folders/1Ei56_HDjLMPbdLq9QdQhoxN3J1YdzZw0). If you are experimenting with this repository after the training date, you can download the data from here: https://portal.nersc.gov/project/dasrepo/pharring/.
+Note that you will have to adjust the data path in `submit_pm.sh` to point to your personal copy after downloading.
 
 
 ## Single GPU training
 
 First, let us look at the performance of the training script without optimizations on a single GPU.
 
-On Perlmutter for the tutorial, we will be submitting jobs to the batch queue. To submit this job, use the following command:
+On Perlmutter for the hands-on, we will be submitting jobs to the batch queue. To submit this job, use the following command:
 ```
 sbatch -n 1 ./submit_pm.sh --config=short --num_epochs 3
 ```
@@ -126,11 +121,17 @@ As our training with the `short` config runs, it should also dump the training m
 
 If you are interested in learning how to profile and optimize your PyTorch
 code on Perlmutter, please refer to our full SC21 tutorial material at
-https://github.com/NERSC/ml-pm-training-2022#single-gpu-performance-profiling-and-optimization
+https://github.com/NERSC/sc21-dl-tutorial#single-gpu-performance-profiling-and-optimization
 
 ### Full training with optimizations
-Now you can run the full model training on a single GPU with our optimizations. For convenience, we provide a configuration with the optimizations already enabled. Submit the full training with:
+For convenience, we provide a configuration `bs64_opt` with all our optimizations in place. This configuration for single-GPU training is much faster than the `base` configuration, but still takes around 35 minutes to complete fully. In interest of saving time, we have also included an example training log for the `bs64_opt` config in the repository. To view this in TensorBoard, simply copy it to the logs directory:
+```
+cp -r ./example_logs/bs64_opt $SCRATCH/ml-pm-training-2022/logs
+```
 
+Now this run should be visible in TensorBoard, along with the other ones already there. Note the convergence rate per step is the same, but each step takes far less time than the `base` config.
+
+If you want, you can also run the full model training on a single GPU with our optimizations yourself with:
 ```
 sbatch -n 1 -t 40 ./submit_pm.sh --config=bs64_opt
 ```
@@ -220,170 +221,9 @@ You should also consider the following questions:
 
 ## Multi-GPU performance profiling and optimization
 
-With distributed training enabled and large batch convergence tested, we are ready 
-to optimize the multi-GPU training throughput. We start with understanding and ploting
-the performance of our application as we scale. Then we can go in more details and profile 
-the multi-GPU training with Nsight Systems to understand the communication performance. 
-
-### Weak and Strong Throughput Scaling
-
-First we want to measure the scaling efficiency. An example command to generate the points for 8 nodes is:
-```
-BENCHY_OUTPUT=weak_scale sbatch -N 8 ./submit_pm.sh --num_data_workers 4 --local_batch_size 64 --config=bs64_opt --enable_benchy
-```
-
-<img src="tutorial_images/scale_perfEff.png" width="500">
-
-The plot shows the throughput as we scale up to 32 nodes. The solid green line shows the real data throughput, while the dotted green line shows the ideal throughput, i.e. if we multiply the single GPU throughput by the number of GPUs used. For example for 32 nodes we get around 78% scaling efficiency. The blue lines show the data throughput by running the data-loader in isolation. The orange lines show the throughput for synthetic data.
-
-Next we can further breakdown the performance of the applications, by switching off the communication between workers. An example command to generate the points for 8 nodes and adding the noddp flag is:
-```
-BENCHY_OUTPUT=weak_scale_noddp sbatch -N 8 ./submit_pm.sh --num_data_workers 4 --local_batch_size 64 --config=bs64_opt --enable_benchy --noddp
-```
-
-<img src="tutorial_images/scale_perfComm.png" width="500">
-
-The orange line is with synthetic data, so no I/O overhead, and the orange dotted line is with synthetic data but having the communication between compute switched off. That effectively makes the dotted orange line the compute of the application. By comparing it with the solid orange line we can get the communication overhead. For example in this case for 32 nodes the communication overhead is around 25%.
-
-One thing we can do to improve communication is to make sure that we are using the full compute capabilities of our GPU. Because Pytorch is optimizing the overlap between communication and compute, increasing the compute performed between communication will lead to better throughput. In the following plot we increased the local batch size from 64 to 128 and we can see the scaling efficiency increased to around 89% for 32 nodes.
-
-<img src="tutorial_images/scale_perfEff_bs128.png" width="500">
-
-Also to understand better the reason for this improvement we can look at the following plot of the communication overhead. The blue lines are with batch size of 128 and the orange lines with batch size 64. The difference between the solid and dotted lines is smaller for larger batch size as expected. For example for 32 nodes we see an improvement in the communication overhead from 25% for batch size 64, to 12% for batch size 128.
-
-<img src="tutorial_images/scale_perfDiffBS.png" width="500">
-
-### Profiling with Nsight Systems
-
-Using the optimized options for compute and I/O, we profile the communication baseline with 
-4 GPUs (1 node) on Perlmutter: 
-```
-ENABLE_PROFILING=1 PROFILE_OUTPUT=4gpu_baseline sbatch -n 4 ./submit_pm.sh --config=bs64_opt --num_epochs 4 --num_data_workers 8 --local_batch_size 16 --enable_manual_profiling
-```
-Considering both the case of strong scaling and large-batch training limitation, the 
-`local_batch_size`, i.e. per GPU batch size, is set to 16 to show the effect of communication. Loading this profile ([`4gpu_baseline.qdrep`](sample_nsys_profiles/4gpu_baseline.qdrep)) in Nsight Systems will look like this: 
-![NSYS 4gpu_Baseline](tutorial_images/nsys_4gpu_baseline.png)
-where the stream 20 shows the NCCL communication calls. 
-
-By default, for our model there are 8 NCCL calls per iteration, as shown in zoomed-in view:
-![NSYS 4gpu_Baseline_zoomed](tutorial_images/nsys_4gpu_baseline_zoomed.png)
-
-The performance of this run:
-```
-2021-11-10 04:03:37,792 - root - INFO - Time taken for epoch 2 is 61.7418851852417 sec, avg 1061.4512304471264 samples/sec
-2021-11-10 04:03:37,792 - root - INFO -   Avg train loss=0.006371
-2021-11-10 04:03:41,047 - root - INFO -   Avg val loss=0.006337
-2021-11-10 04:03:41,048 - root - INFO -   Total validation time: 3.254544973373413 sec
-2021-11-10 04:04:32,869 - root - INFO - Time taken for epoch 3 is 51.81808805465698 sec, avg 1264.7321130581577 samples/sec
-2021-11-10 04:04:32,869 - root - INFO -   Avg train loss=0.005793
-2021-11-10 04:04:36,134 - root - INFO -   Avg val loss=0.005889
-2021-11-10 04:04:36,134 - root - INFO -   Total validation time: 3.2647454738616943 sec
-2021-11-10 04:05:27,672 - root - INFO - Time taken for epoch 4 is 51.53450584411621 sec, avg 1271.6916350810875 samples/sec
-2021-11-10 04:05:27,672 - root - INFO -   Avg train loss=0.005587
-2021-11-10 04:05:30,891 - root - INFO -   Avg val loss=0.005936
-2021-11-10 04:05:30,891 - root - INFO -   Total validation time: 3.2182624340057373 sec
-```
-
-### Adjusting DistributedDataParallel options
-
-The [tuning knobs](https://pytorch.org/docs/stable/generated/torch.nn.parallel.DistributedDataParallel.html) 
-for `DistributedDataParallel` includes `broadcast_buffers`, `bucket_cap_mb`, etc. `broadcast_buffers` adds 
-additional communication (syncing buffers) and is enabled by default, which is often not necessary. `bucket_cap_mb` 
-sets a upper limit for the messsage size per NCCL call, adjusting which can change the total number of communication 
-calls per iteration. The proper bucket size depends on the overlap between communication and computation, and requires 
-tunning. 
-
-Since there is no batch norm layer in our model, it's safe to disable the `broadcast_buffers` with the added knob `--disable_broadcast_buffers`:
-```
-ENABLE_PROFILING=1 PROFILE_OUTPUT=4gpu_nobroadcast sbatch -n 4 ./submit_pm.sh --config=bs64_opt --num_epochs 4 --num_data_workers 8 --local_batch_size 16 --enable_manual_profiling --disable_broadcast_buffers
-```
-Loading this profile ([`4gpu_nobroadcast.qdrep`](sample_nsys_profiles/4gpu_nobroadcast.qdrep)) in Nsight Systems will look like this:
-![NSYS 4gpu_nobroadcast](tutorial_images/nsys_4gpu_nobroadcast.png)
-The per step timing is slightly improved comparing to the baseline. 
-
-The performance of this run: 
-```
-2021-11-10 04:12:07,932 - root - INFO - Time taken for epoch 2 is 62.6831419467926 sec, avg 1045.5123652804289 samples/sec
-2021-11-10 04:12:07,932 - root - INFO -   Avg train loss=0.006372
-2021-11-10 04:12:11,173 - root - INFO -   Avg val loss=0.006370
-2021-11-10 04:12:11,173 - root - INFO -   Total validation time: 3.2399580478668213 sec
-2021-11-10 04:13:01,406 - root - INFO - Time taken for epoch 3 is 50.23048114776611 sec, avg 1304.705798202663 samples/sec
-2021-11-10 04:13:01,406 - root - INFO -   Avg train loss=0.005815
-2021-11-10 04:13:04,636 - root - INFO -   Avg val loss=0.005902
-2021-11-10 04:13:04,636 - root - INFO -   Total validation time: 3.22876238822937 sec
-2021-11-10 04:13:54,472 - root - INFO - Time taken for epoch 4 is 49.83389210700989 sec, avg 1315.088933035222 samples/sec
-2021-11-10 04:13:54,473 - root - INFO -   Avg train loss=0.005614
-2021-11-10 04:13:57,722 - root - INFO -   Avg val loss=0.005941
-2021-11-10 04:13:57,723 - root - INFO -   Total validation time: 3.2491915225982666 sec
-```
-Comparing to the baseline, there are few percentages (performance may slightly vary run by run) improvement in `samples/sec`. 
-
-To show the effect of the message bucket size, we add another knob to the code, `--bucket_cap_mb`. The current 
-default value in PyTorch is 25 mb. We profile a run with 100 mb bucket size with following command:
-```
-ENABLE_PROFILING=1 PROFILE_OUTPUT=4gpu_bucket100mb sbatch -n 4 ./submit_pm.sh --config=bs64_opt --num_epochs 4 --num_data_workers 8 --local_batch_size 16 --enable_manual_profiling --disable_broadcast_buffers --bucket_cap_mb 100
-```
-Loading this profile ([`4gpu_bucketcap100mb.qdrep`](sample_nsys_profiles/4gpu_bucketcap100mb.qdrep)) in Nsight Systems (zoomed in to a single iteration) will look like this:
-![NSYS 4gpu_bucketcap100mb_zoomed](tutorial_images/nsys_4gpu_bucketcap100mb_zoomed.png)
-the total number of NCCL calls per step now reduced to 5. 
-
-The performance of this run:
-```
-2021-11-10 04:19:48,472 - root - INFO - Time taken for epoch 2 is 59.066428899765015 sec, avg 1109.5304256706254 samples/sec
-2021-11-10 04:19:48,472 - root - INFO -   Avg train loss=0.006478
-2021-11-10 04:19:51,711 - root - INFO -   Avg val loss=0.006588
-2021-11-10 04:19:51,712 - root - INFO -   Total validation time: 3.239215612411499 sec
-2021-11-10 04:20:41,475 - root - INFO - Time taken for epoch 3 is 49.75986886024475 sec, avg 1317.0452716437817 samples/sec
-2021-11-10 04:20:41,475 - root - INFO -   Avg train loss=0.005917
-2021-11-10 04:20:44,730 - root - INFO -   Avg val loss=0.006044
-2021-11-10 04:20:44,730 - root - INFO -   Total validation time: 3.2542178630828857 sec
-2021-11-10 04:21:34,517 - root - INFO - Time taken for epoch 4 is 49.78394103050232 sec, avg 1316.4084370067546 samples/sec
-2021-11-10 04:21:34,517 - root - INFO -   Avg train loss=0.005700
-2021-11-10 04:21:37,772 - root - INFO -   Avg val loss=0.006073
-2021-11-10 04:21:37,773 - root - INFO -   Total validation time: 3.2548396587371826 sec
-```
-Similarly, to understand the cross node performance, we run the baseline and optimized options with 2 nodes on Perlmutter. 
-
-Baseline:
-```
-ENABLE_PROFILING=1 PROFILE_OUTPUT=8gpu_baseline sbatch -N 2 ./submit_pm.sh --config=bs64_opt --num_epochs 4 --num_data_workers 8 --local_batch_size 16 --enable_manual_profiling 
-```
-and the performance of the run: 
-```
-2021-11-10 02:41:30,680 - root - INFO - Time taken for epoch 2 is 44.45261096954346 sec, avg 1474.2891040731388 samples/sec
-2021-11-10 02:41:30,710 - root - INFO -   Avg train loss=0.007586
-2021-11-10 02:41:32,457 - root - INFO -   Avg val loss=0.007256
-2021-11-10 02:41:32,457 - root - INFO -   Total validation time: 1.7458698749542236 sec
-2021-11-10 02:42:08,002 - root - INFO - Time taken for epoch 3 is 35.54009485244751 sec, avg 1844.0018315113414 samples/sec
-2021-11-10 02:42:08,028 - root - INFO -   Avg train loss=0.006422
-2021-11-10 02:42:09,688 - root - INFO -   Avg val loss=0.006547
-2021-11-10 02:42:09,688 - root - INFO -   Total validation time: 1.6595783233642578 sec
-2021-11-10 02:42:45,635 - root - INFO - Time taken for epoch 4 is 35.94469451904297 sec, avg 1823.245429594067 samples/sec
-2021-11-10 02:42:45,644 - root - INFO -   Avg train loss=0.006166
-2021-11-10 02:42:47,310 - root - INFO -   Avg val loss=0.006547
-2021-11-10 02:42:47,310 - root - INFO -   Total validation time: 1.6650199890136719 sec
-```
-Optimized:
-```
-ENABLE_PROFILING=1 PROFILE_OUTPUT=8gpu_bucket100mb sbatch -N 2 ./submit_pm.sh --config=bs64_opt --num_epochs 4 --num_data_workers 8 --local_batch_size 16 --enable_manual_profiling --disable_broadcast_buffers --bucket_cap_mb 100
-```
-and the performance of the run:
-```
-2021-11-10 02:41:28,509 - root - INFO - Time taken for epoch 2 is 43.84619975090027 sec, avg 1494.67913689953 samples/sec
-2021-11-10 02:41:28,528 - root - INFO -   Avg train loss=0.007528
-2021-11-10 02:41:30,271 - root - INFO -   Avg val loss=0.007238
-2021-11-10 02:41:30,272 - root - INFO -   Total validation time: 1.742598056793213 sec
-2021-11-10 02:42:05,129 - root - INFO - Time taken for epoch 3 is 34.85356664657593 sec, avg 1880.3240616534827 samples/sec
-2021-11-10 02:42:05,136 - root - INFO -   Avg train loss=0.006444
-2021-11-10 02:42:06,803 - root - INFO -   Avg val loss=0.006532
-2021-11-10 02:42:06,804 - root - INFO -   Total validation time: 1.6663029193878174 sec
-2021-11-10 02:42:42,100 - root - INFO - Time taken for epoch 4 is 35.293962717056274 sec, avg 1856.8614843673777 samples/sec
-2021-11-10 02:42:42,123 - root - INFO -   Avg train loss=0.006195
-2021-11-10 02:42:43,763 - root - INFO -   Avg val loss=0.006568
-2021-11-10 02:42:43,786 - root - INFO -   Total validation time: 1.6387364864349365 sec
-```
-Note that the batch size is set to a small value to tune the knobs at smaller scale. To have a better scaliing efficiency, we
- want to increase the per GPU compute intensity by increasing the per GPU batch size. 
+If you are interested in learning how to profile and optimize your multi-GPU PyTorch
+code on Perlmutter, please refer to our full SC21 tutorial material at
+https://github.com/NERSC/sc21-dl-tutorial#multi-gpu-performance-profiling-and-optimization
 
 ## Putting it all together
 
@@ -393,3 +233,4 @@ With all of our multi-GPU settings and optimizations in place, we now leave it t
 * Change other components, such as the optimizer used. Here we have used the standard Adam optimizer, but many practitioners also use the SGD optimizer (with momentum) in distributed training.
 
 The [PyTorch docs](https://pytorch.org/docs/stable/index.html) will be helpful if you are attempting more advanced changes.
+
