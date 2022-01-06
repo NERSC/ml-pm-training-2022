@@ -14,9 +14,7 @@ This repository contains the example code material for the deep learning hands-o
 
 ## Links
 
-** TODO: update the slides links **
-
-Tutorial slides: https://drive.google.com/drive/folders/1Ei56_HDjLMPbdLq9QdQhoxN3J1YdzZw0?usp=sharing
+Presentation slides: https://docs.google.com/presentation/d/1ov-O11Q90g7r-Hs8cGCHBtrq0yms0pm2oO4lR01gExI/edit?usp=sharing
 
 NERSC JupyterHub: https://jupyter.nersc.gov
 
