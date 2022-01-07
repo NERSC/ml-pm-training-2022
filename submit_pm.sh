@@ -8,7 +8,7 @@
 #SBATCH --image=romerojosh/containers:sc21_tutorial
 #SBATCH -J pm-crop64
 #SBATCH -o %x-%j.out
-#SBATCH --reservation perlmutter_day3
+#SBATCH --reservation=perlmutter_day3
 
 DATADIR=/pscratch/sd/j/joshr/nbody2hydro/datacopies
 LOGDIR=${SCRATCH}/ml-pm-training-2022/logs
