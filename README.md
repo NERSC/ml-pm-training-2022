@@ -7,9 +7,7 @@ This repository contains the example code material for the deep learning hands-o
 * [Installation](#installation-and-setup)
 * [Model, data, and code overview](#model-data-and-training-code-overview)
 * [Single GPU training](#single-gpu-training)
-* [Single GPU performance](#single-gpu-performance-profiling-and-optimization)
 * [Distributed training](#distributed-gpu-training)
-* [Multi GPU performance](#multi-gpu-performance-profiling-and-optimization)
 * [Putting it all together](#putting-it-all-together)
 
 ## Links
@@ -109,13 +107,12 @@ To view results in TensorBoard, open the [`start_tensorboard.ipynb`](start_tenso
 
 As our training with the `short` config runs, it should also dump the training metrics to the TensorBoard directory, and TensorBoard will parse the data and display it for you. You can hit the refresh button in the upper-right corner of TensorBoard to update the plots with the latest data.
 
-## Single GPU performance profiling and optimization
+### Full training with optimizations
 
 If you are interested in learning how to profile and optimize your PyTorch
 code on Perlmutter, please refer to our full SC21 tutorial material at
 https://github.com/NERSC/sc21-dl-tutorial#single-gpu-performance-profiling-and-optimization
 
-### Full training with optimizations
 For convenience, we provide a configuration `bs64_opt` with all our optimizations in place. This configuration for single-GPU training is much faster than the `base` configuration, but still takes around 35 minutes to complete fully. In interest of saving time, we have also included an example training log for the `bs64_opt` config in the repository. To view this in TensorBoard, simply copy it to the logs directory:
 ```
 cp -r ./example_logs/bs64_opt $SCRATCH/ml-pm-training-2022/logs
@@ -211,8 +208,6 @@ You should also consider the following questions:
 * *What are the limitations to scaling up batch size and learning rates?*
 * *What would happen to the learning curves and runtime if we did "strong scaling" instead (hold global batch size fixed as we increase GPUs, and respectively decrease the local batch size)?*
 
-## Multi-GPU performance profiling and optimization
-
 If you are interested in learning how to profile and optimize your multi-GPU PyTorch
 code on Perlmutter, please refer to our full SC21 tutorial material at
 https://github.com/NERSC/sc21-dl-tutorial#multi-gpu-performance-profiling-and-optimization
@@ -225,4 +220,3 @@ With all of our multi-GPU settings and optimizations in place, we now leave it t
 * Change other components, such as the optimizer used. Here we have used the standard Adam optimizer, but many practitioners also use the SGD optimizer (with momentum) in distributed training.
 
 The [PyTorch docs](https://pytorch.org/docs/stable/index.html) will be helpful if you are attempting more advanced changes.
-
