@@ -1,14 +1,12 @@
 #!/bin/bash 
 #SBATCH -C gpu 
-#SBATCH -A ntrain3_g
 #SBATCH --ntasks-per-node 4
 #SBATCH --cpus-per-task 32
-#SBATCH --gpus-per-task 1
+#SBATCH --gpus-per-node 4
 #SBATCH --time=0:10:00
 #SBATCH --image=romerojosh/containers:sc21_tutorial
 #SBATCH -J pm-crop64
 #SBATCH -o %x-%j.out
-#SBATCH --reservation=perlmutter_day3
 
 DATADIR=/pscratch/sd/j/joshr/nbody2hydro/datacopies
 LOGDIR=${SCRATCH}/ml-pm-training-2022/logs
