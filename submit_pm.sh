@@ -15,7 +15,8 @@ args="${@}"
 
 hostname
 
-export NCCL_NET_GDR_LEVEL=PHB
+# Use the head node of the job as the main communicator
+export MASTER_ADDR=$(hostname)
 
 set -x
 srun -u shifter -V ${DATADIR}:/data -V ${LOGDIR}:/logs \
